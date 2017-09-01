@@ -37,7 +37,7 @@ class Oberfalke_client(discord.Client):
         if not mentioner.id in self.user_mention_count:
             self.user_mention_count[mentioner.id] = 1
         else:
-            self.user_mention_count[mentioner.id] = self.user_mention_count[mentioner.id] + 1
+            self.user_mention_count[mentioner.id] += 1
 
         # Respond according to mention count
         author_mention_count = self.user_mention_count[mentioner.id]
@@ -64,18 +64,73 @@ class Oberfalke_client(discord.Client):
                 content="Das reicht. Hätte <@269910584877645825> das schon implementiert, hättest du jetzt Ärger, %s." % (author_mention_string)
             )
 
+    async def respond_to_falkenheil(self, message):
+        # Respond to the message so long as it isn't the bot's own.
+        if not message.author.id == self.user.id:
+            await self.add_reaction(message, "🦅")
+            await self.type_message(message.channel, content="HEIL IHNEN!")
+
+        # Wait for responses from other users and thumbs-up and thank them.
+        responders = []
+        response = await self.wait_for_message(
+            timeout=15,
+            check=lambda s:s.content.casefold().find("heil ihnen") > -1
+        )
+
+        while response:
+            if not response.author.id == self.user.id:
+                if not response.author.id in responders:
+                    responders.append(response.author.id)
+                await self.add_reaction(response, "👍")
+
+            response = await self.wait_for_message(
+                timeout=15,
+                check=lambda s:s.content.casefold().find("heil ihnen") > -1
+            )
+
+        if not responders == []:
+            thankyoustring = "Der Dank der Falken gebührt "
+
+            for index, responder in enumerate(responders):
+                thankyoustring += "<@" + responder + ">"
+
+                if index < len(responders) - 3:
+                    thankyoustring += ", "
+                if index == len(responders) - 2:
+                    thankyoustring += " und "
+
+            thankyoustring += " für die Ergebenheit!"
+
+            await self.type_message(message.channel, content=thankyoustring)
+
+
     # Event listeners:
+
     async def on_ready(self):
         print("Verbunden mit %d Servern:" % (len(client.servers)))
         for server in client.servers:
             print("%s -- %s" % (server.id, server.name))
 
     async def on_message(self, message):
+        # Casefolded version of the message for case-insensitive searching
+        casefoldmsg = message.content.casefold()
+
         # Search for mention and respond if found
         bot_mentionstring = '<@' + self.user.id + '>'
 
+        # The raw message string is being used to not alter the IDs
         if message.content.find(bot_mentionstring) > -1:
             await self.respond_to_mention(message.author, message.channel)
+
+        # Search for the words "Heil", "den", and "Falken" in that order and
+        # respond if found.
+        pos = casefoldmsg.find("heil")
+        if pos > -1:
+            pos = casefoldmsg.find("den", pos)
+            if pos > -1:
+                pos = casefoldmsg.find("falken", pos)
+                if pos > -1:
+                    await self.respond_to_falkenheil(message)
 
 # Initialise client object.
 client = Oberfalke_client()
