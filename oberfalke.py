@@ -12,18 +12,18 @@ with open("token.txt", "r") as tokenfile:
 
 # Client class with event listeners
 class Oberfalke_client(discord.Client):
-    # Similar to send_message(), but simulates actual typing
+    # Similar to send_message(), but simulates actual typing by adding delays
     async def type_message(self, destination, content=None, tts=False, embed=None):
-        # Calculate typing_time based on the length of content
+        # Calculate typing_delay based on the length of content
         if not content:
-            typing_time = 1 # No text content; assume 1 for embedded content
+            typing_delay = 1 # No text content; assume 1 for embedded content
         else:
-            typing_time = len(str(content)) / 30
-            if typing_time > 10:
-                typing_time = 10
+            typing_delay = len(str(content)) / 30
+            if typing_delay > 10:
+                typing_delay = 10
 
         await self.send_typing(destination)
-        await asyncio.sleep(typing_time)
+        await asyncio.sleep(typing_delay)
         return await self.send_message(destination, content=content, tts=tts, embed=embed)
 
     # Event listeners:
