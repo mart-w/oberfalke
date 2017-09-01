@@ -12,6 +12,12 @@ with open("token.txt", "r") as tokenfile:
 
 # Client class with event listeners
 class Oberfalke_client(discord.Client):
+    def __init__(self, *args, **kwargs):
+        super(Oberfalke_client, self).__init__(*args, **kwargs)
+
+        # lists how often the bot has been mentioned by individual users
+        self.user_mention_count = {}
+
     # Similar to send_message(), but simulates actual typing by adding delays
     async def type_message(self, destination, content=None, tts=False, embed=None):
         # Calculate typing_delay based on the length of content
@@ -26,11 +32,50 @@ class Oberfalke_client(discord.Client):
         await asyncio.sleep(typing_delay)
         return await self.send_message(destination, content=content, tts=tts, embed=embed)
 
+    async def respond_to_mention(self, mentioner, channel):
+        # Increment the user's mention counter
+        if not mentioner.id in self.user_mention_count:
+            self.user_mention_count[mentioner.id] = 1
+        else:
+            self.user_mention_count[mentioner.id] = self.user_mention_count[mentioner.id] + 1
+
+        # Respond according to mention count
+        author_mention_count = self.user_mention_count[mentioner.id]
+        author_mention_string = "<@" + mentioner.id + ">"
+
+        if author_mention_count == 1:
+            await self.type_message(
+                channel,
+                content="Wage es nicht, mich anzusprechen, %s!" % (author_mention_string)
+            )
+        elif author_mention_count == 2:
+            await self.type_message(
+                channel,
+                content="Ich warne dich, %s, mit mir ist nicht zu scherzen." % (author_mention_string)
+            )
+        elif author_mention_count == 3:
+            await self.type_message(
+                channel,
+                content="Ich sage es kein weiteres Mal, %s. Das nächste Mal hat das Konsequenzen." % (author_mention_string)
+            )
+        else:
+            await self.type_message(
+                channel,
+                content="Das reicht. Hätte <@269910584877645825> das schon implementiert, hättest du jetzt Ärger, %s." % (author_mention_string)
+            )
+
     # Event listeners:
     async def on_ready(self):
         print("Verbunden mit %d Servern:" % (len(client.servers)))
         for server in client.servers:
             print("%s -- %s" % (server.id, server.name))
+
+    async def on_message(self, message):
+        # Search for mention and respond if found
+        bot_mentionstring = '<@' + self.user.id + '>'
+
+        if message.content.find(bot_mentionstring) > -1:
+            await self.respond_to_mention(message.author, message.channel)
 
 # Initialise client object.
 client = Oberfalke_client()
