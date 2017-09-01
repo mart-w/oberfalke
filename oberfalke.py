@@ -94,7 +94,7 @@ class Oberfalke_client(discord.Client):
             for index, responder in enumerate(responders):
                 thankyoustring += "<@" + responder + ">"
 
-                if index < len(responders) - 3:
+                if index <= len(responders) - 3:
                     thankyoustring += ", "
                 if index == len(responders) - 2:
                     thankyoustring += " und "
@@ -126,11 +126,22 @@ class Oberfalke_client(discord.Client):
         # respond if found.
         pos = casefoldmsg.find("heil")
         if pos > -1:
-            pos = casefoldmsg.find("den", pos)
+            pos = casefoldmsg.find(" den ", pos)
             if pos > -1:
                 pos = casefoldmsg.find("falken", pos)
                 if pos > -1:
                     await self.respond_to_falkenheil(message)
+                else: # The user hailed the wrong party
+                    await self.type_message(
+                        message.channel,
+                        content="Bitte was, <@%s>?! **HEIL DEN FALKEN!**" % (message.author.id)
+                    )
+            else: # The user just said "Heil" in any context
+                if not casefoldmsg.find("heil ihnen") > -1: # "Heil ihnen" should end the joke, not start yet a new one
+                    await self.type_message(
+                        message.channel,
+                        content="HEIL DEN FALKEN!"
+                    )
 
 # Initialise client object.
 client = Oberfalke_client()
