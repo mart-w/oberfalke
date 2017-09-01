@@ -4,6 +4,7 @@
 
 import discord
 import asyncio
+import datetime
 
 # Lese API-Token ein.
 with open("token.txt", "r") as tokendatei:
@@ -11,7 +12,21 @@ with open("token.txt", "r") as tokendatei:
 
 # Client-Klasse mit Event-Listenern
 class Oberfalkenclient(discord.Client):
-    # Bot ist einsatzbereit.
+    # Vergleiche send_message(). Simuliert Tippen durch den Bot.
+    async def type_message(self, destination, content=None, tts=False, embed=None):
+        # Berechne simulierte Tippzeit in Sekunden aus Länge der Nachricht.
+        if not content:
+            tippzeit = 1 # Keine Nachricht; nehme 1 für eingebettete Inhalte an.
+        else:
+            tippzeit = len(str(content)) / 30
+            if tippzeit > 10:
+                tippzeit = 10
+
+        await self.send_typing(destination)
+        await asyncio.sleep(tippzeit)
+        return await self.send_message(destination, content=content, tts=tts, embed=embed)
+
+    # Event-Listener:
     async def on_ready(self):
         print("Verbunden mit %d Servern:" % (len(client.servers)))
         for server in client.servers:
