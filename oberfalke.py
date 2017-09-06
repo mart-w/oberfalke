@@ -5,6 +5,7 @@
 import discord
 import asyncio
 import datetime
+import re
 
 # Read API token from token file.
 with open("token.txt", "r") as tokenfile:
@@ -17,6 +18,12 @@ class Oberfalke_client(discord.Client):
 
         # lists how often the bot has been mentioned by individual users
         self.user_mention_count = {}
+
+        # Regular expression objects.
+        self.re_falkenheil = re.compile(r"HEIL[ \w,:]+DEN[ \w,]+FALKEN", flags=re.IGNORECASE)
+        self.re_falkenheil_response = re.compile(r"HEIL IHNEN", flags=re.IGNORECASE)
+        self.re_falkenspruch = re.compile(r"falke", flags=re.IGNORECASE)
+        self.re_treason = re.compile(r"HEIL ((?:(?:DEM)|(?:DER)|(?:DEN)) [ \w,]*)", flags=re.IGNORECASE)
 
     # Similar to send_message(), but simulates actual typing by adding delays
     async def type_message(self, destination, content=None, tts=False, embed=None):
@@ -65,43 +72,57 @@ class Oberfalke_client(discord.Client):
             )
 
     async def respond_to_falkenheil(self, message):
+        supporters = [] # users to thank for hailing the falcons
+
         # Respond to the message so long as it isn't the bot's own.
         if not message.author.id == self.user.id:
+            supporters.append(message.author.id)
             await self.add_reaction(message, "🦅")
             await self.type_message(message.channel, content="HEIL IHNEN!")
 
         # Wait for responses from other users and thumbs-up and thank them.
-        responders = []
         response = await self.wait_for_message(
             timeout=15,
-            check=lambda s:s.content.casefold().find("heil ihnen") > -1
+            check=lambda s:self.re_falkenheil_response.search(s.content)
         )
 
         while response:
             if not response.author.id == self.user.id:
-                if not response.author.id in responders:
-                    responders.append(response.author.id)
+                if not response.author.id in supporters:
+                    supporters.append(response.author.id)
                 await self.add_reaction(response, "👍")
 
             response = await self.wait_for_message(
                 timeout=15,
-                check=lambda s:s.content.casefold().find("heil ihnen") > -1
+                check=lambda s:self.re_falkenheil_response.search(s.content)
             )
 
-        if not responders == []:
+        if not supporters == []:
             thankyoustring = "Der Dank der Falken gebührt "
 
-            for index, responder in enumerate(responders):
-                thankyoustring += "<@" + responder + ">"
+            for index, supporter in enumerate(supporters):
+                thankyoustring += "<@" + supporter + ">"
 
-                if index <= len(responders) - 3:
+                if index <= len(supporters) - 3:
                     thankyoustring += ", "
-                if index == len(responders) - 2:
+                if index == len(supporters) - 2:
                     thankyoustring += " und "
 
             thankyoustring += " für die Ergebenheit!"
 
             await self.type_message(message.channel, content=thankyoustring)
+
+    async def respond_to_treason(self, message, evidence):
+        author_mentionstring = "<@" + message.author.id + ">"
+
+        # Generate exclamation repeating the traitor's unholy words
+        exclamation = evidence.group(0)
+        exclamation = exclamation[:1].upper() + exclamation[1:] # Capitalise first letter
+
+        await self.type_message(
+            message.channel,
+            content="%s %s?! Was soll das denn? HEIL DEN FALKEN!" % (author_mentionstring, exclamation)
+        )
 
 
     # Event listeners:
@@ -112,36 +133,23 @@ class Oberfalke_client(discord.Client):
             print("%s -- %s" % (server.id, server.name))
 
     async def on_message(self, message):
-        # Casefolded version of the message for case-insensitive searching
-        casefoldmsg = message.content.casefold()
-
         # Search for mention and respond if found
         bot_mentionstring = '<@' + self.user.id + '>'
 
-        # The raw message string is being used to not alter the IDs
         if message.content.find(bot_mentionstring) > -1:
             await self.respond_to_mention(message.author, message.channel)
 
-        # Search for the words "Heil", "den", and "Falken" in that order and
-        # respond if found.
-        pos = casefoldmsg.find("heil")
-        if pos > -1:
-            pos = casefoldmsg.find(" den ", pos)
-            if pos > -1:
-                pos = casefoldmsg.find("falken", pos)
-                if pos > -1:
-                    await self.respond_to_falkenheil(message)
-                else: # The user hailed the wrong party
-                    await self.type_message(
-                        message.channel,
-                        content="Bitte was, <@%s>?! **HEIL DEN FALKEN!**" % (message.author.id)
-                    )
-            else: # The user just said "Heil" in any context
-                if not casefoldmsg.find("heil ihnen") > -1: # "Heil ihnen" should end the joke, not start yet a new one
-                    await self.type_message(
-                        message.channel,
-                        content="HEIL DEN FALKEN!"
-                    )
+        # Search for hailing or mentioning of the falcons and respond accordingly
+        if self.re_falkenheil.search(message.content):
+            await self.respond_to_falkenheil(message)
+        elif self.re_falkenspruch.search(message.content):
+            if not message.author.id == self.user.id:
+                await self.type_message(message.channel, content="HEIL DEN FALKEN!")
+        else:
+            # Has anyone but the holy falcons been hailed?
+            treason = self.re_treason.search(message.content)
+            if treason: # hang them!
+                await self.respond_to_treason(message, treason)
 
 # Initialise client object.
 client = Oberfalke_client()
