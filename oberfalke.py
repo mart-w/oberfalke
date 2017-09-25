@@ -86,7 +86,7 @@ class Oberfalke_client(discord.Client):
 
 
     async def respond_to_mention(self, mentioner, channel):
-        author_reputation = self.get_reputation(mentioner)
+        author_reputation = await self.get_reputation(mentioner)
         author_mention_string = "<@" + mentioner.id + ">"
 
         if author_reputation < -5:
