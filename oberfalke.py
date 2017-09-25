@@ -6,10 +6,12 @@ import discord
 import asyncio
 import datetime
 import re
+from tinydb import TinyDB, Query
 
 # Read API token from token file.
 with open("token.txt", "r") as tokenfile:
     api_token = tokenfile.readline().rstrip()
+
 
 # Client class with event listeners
 class Oberfalke_client(discord.Client):
@@ -25,6 +27,21 @@ class Oberfalke_client(discord.Client):
         self.re_falkenspruch = re.compile(r"falke", flags=re.IGNORECASE)
         self.re_treason = re.compile(r"HEIL ((?:(?:DEM)|(?:DER)|(?:DEN)) [ \w,]*)", flags=re.IGNORECASE)
 
+        # TinyDB user database.
+        self.db_users = TinyDB("users.json")
+        self.DB_User = Query()
+
+        # Lists on which channels the bot is currently running respnd_to_falkenheil()
+        self.falkenheil_channels = []
+
+    # Check if a :pro: emoji exist. If so, return according Emoji object, otherwise thumbs-up
+    async def get_pro_emoji(self, server):
+        for emoji in server.emojis:
+            if emoji.name == "pro":
+                return emoji
+
+        return "👍"
+
     # Similar to send_message(), but simulates actual typing by adding delays
     async def type_message(self, destination, content=None, tts=False, embed=None):
         # Calculate typing_delay based on the length of content
@@ -38,6 +55,35 @@ class Oberfalke_client(discord.Client):
         await self.send_typing(destination)
         await asyncio.sleep(typing_delay)
         return await self.send_message(destination, content=content, tts=tts, embed=embed)
+
+    # Sets the reputation of a user to the given value.
+    async def set_reputation(self, user, reputation):
+        print("%s: %d" % (user.name, reputation))
+        if self.db_users.search(self.DB_User.id == user.id):
+            self.db_users.update({"reputation": reputation}, self.DB_User.id == user.id)
+        else:
+            self.db_users.insert({"id": user.id, "reputation": reputation})
+
+    # Returns the reputaion value of the given user or None if the user does not exist.
+    async def get_reputation(self, user):
+        result = self.db_users.search(self.DB_User.id == user.id)
+
+        if result:
+            return result[0]["reputation"]
+        else:
+            return None
+
+    # Changes the user's reputation by the given value or sets their reputaion to it if the user does not exist.
+    async def update_reputation(self, user, change):
+        reputation = await self.get_reputation(user)
+
+        if reputation != None:
+            reputation += change
+        else:
+            reputation = change
+
+        await self.set_reputation(user, reputation)
+
 
     async def respond_to_mention(self, mentioner, channel):
         # Increment the user's mention counter
@@ -72,47 +118,46 @@ class Oberfalke_client(discord.Client):
             )
 
     async def respond_to_falkenheil(self, message):
-        supporters = [] # users to thank for hailing the falcons
+        # Make sure the coroutine is not running twice at the same time in one channel
+        if not message.channel.id in self.falkenheil_channels:
+            self.falkenheil_channels.append(message.channel.id)
 
-        # Respond to the message so long as it isn't the bot's own.
-        if not message.author.id == self.user.id:
-            supporters.append(message.author.id)
-            await self.add_reaction(message, "🦅")
-            await self.type_message(message.channel, content="HEIL IHNEN!")
+            supporters = []
+            # Respond to the message so long as it isn't the bot's own.
+            if not message.author.id == self.user.id:
+                supporters.append(message.author.id)
+                await self.update_reputation(message.author, 2)
+                await self.add_reaction(message, "🦅")
+                await self.type_message(message.channel, content="HEIL IHNEN!")
 
-        # Wait for responses from other users and thumbs-up and thank them.
-        response = await self.wait_for_message(
-            timeout=15,
-            check=lambda s:self.re_falkenheil_response.search(s.content)
-        )
-
-        while response:
-            if not response.author.id == self.user.id:
-                if not response.author.id in supporters:
-                    supporters.append(response.author.id)
-                await self.add_reaction(response, "👍")
-
+            # Wait for responses from other users and thumbs-up them.
             response = await self.wait_for_message(
                 timeout=15,
-                check=lambda s:self.re_falkenheil_response.search(s.content)
+                check=lambda s:
+                    s.channel.id == message.channel.id
+                    and s.author.id != self.user.id
+                    and self.re_falkenheil_response.search(s.content)
             )
 
-        if not supporters == []:
-            thankyoustring = "Der Dank der Falken gebührt "
+            while response:
+                if not response.author.id in supporters:
+                    supporters.append(response.author.id)
+                    await self.update_reputation(response.author, 1)
+                await self.add_reaction(response, await self.get_pro_emoji(message.server))
 
-            for index, supporter in enumerate(supporters):
-                thankyoustring += "<@" + supporter + ">"
+                response = await self.wait_for_message(
+                    timeout=15,
+                    check=lambda s:
+                        s.channel.id == message.channel.id
+                        and s.author.id != self.user.id
+                        and self.re_falkenheil_response.search(s.content)
+                )
 
-                if index <= len(supporters) - 3:
-                    thankyoustring += ", "
-                if index == len(supporters) - 2:
-                    thankyoustring += " und "
-
-            thankyoustring += " für die Ergebenheit!"
-
-            await self.type_message(message.channel, content=thankyoustring)
+            self.falkenheil_channels.remove(message.channel.id)
 
     async def respond_to_treason(self, message, evidence):
+        await self.update_reputation(message.author, -5)
+
         author_mentionstring = "<@" + message.author.id + ">"
 
         # Generate exclamation repeating the traitor's unholy words
