@@ -6,6 +6,7 @@ import discord
 import asyncio
 import datetime
 import re
+import random
 from tinydb import TinyDB, Query
 
 # Read API token from token file.
@@ -58,7 +59,6 @@ class Oberfalke_client(discord.Client):
 
     # Sets the reputation of a user to the given value.
     async def set_reputation(self, user, reputation):
-        print("%s: %d" % (user.name, reputation))
         if self.db_users.search(self.DB_User.id == user.id):
             self.db_users.update({"reputation": reputation}, self.DB_User.id == user.id)
         else:
@@ -86,38 +86,41 @@ class Oberfalke_client(discord.Client):
 
 
     async def respond_to_mention(self, mentioner, channel):
-        # Increment the user's mention counter
-        if not mentioner.id in self.user_mention_count:
-            self.user_mention_count[mentioner.id] = 1
-        else:
-            self.user_mention_count[mentioner.id] += 1
-
-        # Respond according to mention count
-        author_mention_count = self.user_mention_count[mentioner.id]
+        author_reputation = self.get_reputation(mentioner)
         author_mention_string = "<@" + mentioner.id + ">"
 
-        if author_mention_count == 1:
-            await self.type_message(
-                channel,
-                content="Wage es nicht, mich anzusprechen, %s!" % (author_mention_string)
-            )
-        elif author_mention_count == 2:
-            await self.type_message(
-                channel,
-                content="Ich warne dich, %s, mit mir ist nicht zu scherzen." % (author_mention_string)
-            )
-        elif author_mention_count == 3:
-            await self.type_message(
-                channel,
-                content="Ich sage es kein weiteres Mal, %s. Das nächste Mal hat das Konsequenzen." % (author_mention_string)
-            )
+        if author_reputation < -5:
+            await self.update_reputation(mentioner, -2)
+            await self.type_message(channel, random.choice([
+            "Schnauze auf den billigen Plätzen!",
+            "Mich sprichst *du* nicht beim Namen an, %s!" % (author_mention_string),
+            "Ich rede nicht mit deinesgleichen.",
+            "Hat jemand was gesagt?",
+            "Habt ihr etwas gehört?",
+            "Ich glaube, ich bekomme Tinnitus. War da was?",
+            "*pfeift*"
+            ]))
+        elif author_reputation > 10:
+            await self.update_reputation(mentioner, 1)
+            await self.type_message(channel, random.choice([
+            "%s! Von dir höre ich doch immer gern." % (author_mention_string),
+            "Es ist immer schön, den Respekt seiner Untertanen zu ernten.",
+            "Lang lebe %s!" % (author_mention_string),
+            "Du hast immer die besten Worte parat, %s." % (author_mention_string)
+            ]))
         else:
-            await self.type_message(
-                channel,
-                content="Das reicht. Hätte <@269910584877645825> das schon implementiert, hättest du jetzt Ärger, %s." % (author_mention_string)
-            )
+            await self.type_message(channel, random.choice([
+            "Ist was?!",
+            "Muss das jetzt sein?",
+            "Jaja, ist gut.",
+            "Kenne ich dich?",
+            "Ich weiß nicht, was ich von dir denken soll.",
+            "*gähnt* Mhm?"
+            ]))
+
 
     async def respond_to_falkenheil(self, message):
+        print(self.falkenheil_channels)
         # Make sure the coroutine is not running twice at the same time in one channel
         if not message.channel.id in self.falkenheil_channels:
             self.falkenheil_channels.append(message.channel.id)
