@@ -64,23 +64,20 @@ class Oberfalke_client(discord.Client):
         else:
             self.db_users.insert({"id": user.id, "reputation": reputation})
 
-    # Returns the reputaion value of the given user or None if the user does not exist.
+    # Returns the reputaion value of the given user or 0 if the user does not exist yet.
     async def get_reputation(self, user):
         result = self.db_users.search(self.DB_User.id == user.id)
 
         if result:
             return result[0]["reputation"]
         else:
-            return None
+            return 0
 
     # Changes the user's reputation by the given value or sets their reputaion to it if the user does not exist.
     async def update_reputation(self, user, change):
         reputation = await self.get_reputation(user)
 
-        if reputation != None:
-            reputation += change
-        else:
-            reputation = change
+        reputation += change
 
         await self.set_reputation(user, reputation)
 
