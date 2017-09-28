@@ -7,6 +7,7 @@ import asyncio
 import datetime
 import re
 import random
+import datetime
 from tinydb import TinyDB, Query
 
 # Read API token from token file.
@@ -23,6 +24,8 @@ class Oberfalke_client(discord.Client):
         self.user_mention_count = {}
 
         # Regular expression objects.
+        self.re_quote = re.compile(r"(?P<author>.*?)\s*>\s*(?P<content>.+)")
+
         self.re_falkenheil = re.compile(r"HEIL[ \w,:]+DEN[ \w,]+FALKEN", flags=re.IGNORECASE)
         self.re_falkenheil_response = re.compile(r"HEIL IHNEN", flags=re.IGNORECASE)
         self.re_falkenspruch = re.compile(r"falke", flags=re.IGNORECASE)
@@ -80,6 +83,75 @@ class Oberfalke_client(discord.Client):
         reputation += change
 
         await self.set_reputation(user, reputation)
+
+    # Compares a User object to a name string and returns if the given object is meant by this string.
+    async def is_same_user(self, user_obj, user_str):
+        # Convert all strings to lowercase so that the search is case-insensitive
+        user_obj_id = user_obj.id.lower() # User ID
+        user_obj_full_name = user_obj.name.lower() + '#' + user_obj.discriminator # Full user name including discriminator, e.g. User#1234
+        user_obj_display_name = user_obj.display_name.lower() # The user's display name
+        user_str = user_str.lower()
+
+        # Name string is the beginning of or is the user ID,
+        # is contained in or is the username
+        # or is contained in or is the display name.
+        if user_obj_id.find(user_str) == 0 \
+        or user_obj_full_name.find(user_str) > -1 \
+        or user_obj_display_name.find(user_str) > -1:
+            return True
+        else:
+            return False
+
+    # Finds and returns a quote in a given channel and returns the found Message object.
+    async def search_message_by_quote(self, quote):
+        match = self.re_quote.fullmatch(quote.content)
+        match_author = match.group("author")
+        match_content = match.group("content")
+
+        if match_author:
+            # Search the last 300 messages
+            async for message in self.logs_from(quote.channel, limit=300, before=quote):
+                if await self.is_same_user(message.author, match_author):
+                    if message.content.find(match_content) > -1:
+                        return message
+
+            return None # Message not found
+        else:
+            # Get the last 100 messages in the channel
+            async for message in self.logs_from(quote.channel, limit=100, before=quote):
+                if message.content.find(match_content) > -1:
+                    return message
+
+            return None # Message not found
+
+    # Quote a message based on a chat quote
+    async def quote_message(self, quote):
+        quoted_message = await self.search_message_by_quote(quote)
+        if quoted_message:
+            timedatelabel = quoted_message.timestamp.strftime("Am %d.%m.%Y um %H:%M Uhr")
+
+            if quoted_message.edited_timestamp: # Message was edited.
+                timedatelabel += quoted_message.edited_timestamp.strftime(", bearbeitet am %d.%m.%Y um %H:%M Uhr")
+
+            timedatelabel += '.'
+
+            quote_embed = discord.Embed(
+                title=quoted_message.content,
+                color=0x1abc9c
+            )
+            quote_embed.set_author(
+                name=quoted_message.author.display_name,
+                icon_url=quoted_message.author.avatar_url
+            )
+            quote_embed.set_footer(
+                text="%s Zitiert von %s." % (timedatelabel, quote.author.display_name),
+                icon_url=quote.author.avatar_url
+            )
+
+            await self.send_message(quote.channel, embed=quote_embed)
+        else:
+            quoter_mention_string = '<@' + quote.author.id + '>'
+            await self.type_message("Tut mir leid, %s, diese Nachricht konnte ich nicht finden." % (quoter_mention_string))
 
 
     async def respond_to_mention(self, mentioner, channel):
@@ -179,23 +251,29 @@ class Oberfalke_client(discord.Client):
             print("%s -- %s" % (server.id, server.name))
 
     async def on_message(self, message):
-        # Search for mention and respond if found
-        bot_mentionstring = '<@' + self.user.id + '>'
+        # Search for quotation
+        if self.re_quote.fullmatch(message.content):
+            await self.quote_message(message)
 
-        if message.content.find(bot_mentionstring) > -1:
-            await self.respond_to_mention(message.author, message.channel)
-
-        # Search for hailing or mentioning of the falcons and respond accordingly
-        if self.re_falkenheil.search(message.content):
-            await self.respond_to_falkenheil(message)
-        elif self.re_falkenspruch.search(message.content):
-            if not message.author.id == self.user.id:
-                await self.type_message(message.channel, content="HEIL DEN FALKEN!")
+        # Fun features.
         else:
-            # Has anyone but the holy falcons been hailed?
-            treason = self.re_treason.search(message.content)
-            if treason: # hang them!
-                await self.respond_to_treason(message, treason)
+            # Search for mention and respond if found
+            bot_mentionstring = '<@' + self.user.id + '>'
+
+            if message.content.find(bot_mentionstring) > -1:
+                await self.respond_to_mention(message.author, message.channel)
+
+            # Search for hailing or mentioning of the falcons and respond accordingly
+            if self.re_falkenheil.search(message.content):
+                await self.respond_to_falkenheil(message)
+            elif self.re_falkenspruch.search(message.content):
+                if not message.author.id == self.user.id:
+                    await self.type_message(message.channel, content="HEIL DEN FALKEN!")
+            else:
+                # Has anyone but the holy falcons been hailed?
+                treason = self.re_treason.search(message.content)
+                if treason: # hang them!
+                    await self.respond_to_treason(message, treason)
 
 # Initialise client object.
 client = Oberfalke_client()
