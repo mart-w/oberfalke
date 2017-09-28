@@ -150,9 +150,7 @@ class Oberfalke_client(discord.Client):
             )
 
             await self.send_message(quote.channel, embed=quote_embed)
-        else:
-            quoter_mention_string = '<@' + quote.author.id + '>'
-            await self.type_message("Tut mir leid, %s, diese Nachricht konnte ich nicht finden." % (quoter_mention_string))
+            await self.delete_message(quote)
 
 
     async def respond_to_mention(self, mentioner, channel):
