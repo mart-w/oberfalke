@@ -38,6 +38,31 @@ class Oberfalke_client(discord.Client):
         # Lists on which channels the bot is currently running respnd_to_falkenheil()
         self.falkenheil_channels = []
 
+
+    # Returns the reputaion value of the given user or 0 if the user does not exist yet.
+    async def get_reputation(self, user):
+        result = self.db_users.search(self.DB_User.id == user.id)
+
+        if result:
+            return result[0]["reputation"]
+        else:
+            return 0
+
+    # Sets the reputation of a user to the given value.
+    async def set_reputation(self, user, reputation):
+        if self.db_users.search(self.DB_User.id == user.id):
+            self.db_users.update({"reputation": reputation}, self.DB_User.id == user.id)
+        else:
+            self.db_users.insert({"id": user.id, "reputation": reputation})
+
+    # Changes the user's reputation by the given value or sets their reputaion to it if the user does not exist.
+    async def update_reputation(self, user, change):
+        reputation = await self.get_reputation(user)
+
+        reputation += change
+
+        await self.set_reputation(user, reputation)
+
     # Check if a :pro: emoji exist. If so, return according Emoji object, otherwise thumbs-up
     async def get_pro_emoji(self, server):
         for emoji in server.emojis:
@@ -59,30 +84,6 @@ class Oberfalke_client(discord.Client):
         await self.send_typing(destination)
         await asyncio.sleep(typing_delay)
         return await self.send_message(destination, content=content, tts=tts, embed=embed)
-
-    # Sets the reputation of a user to the given value.
-    async def set_reputation(self, user, reputation):
-        if self.db_users.search(self.DB_User.id == user.id):
-            self.db_users.update({"reputation": reputation}, self.DB_User.id == user.id)
-        else:
-            self.db_users.insert({"id": user.id, "reputation": reputation})
-
-    # Returns the reputaion value of the given user or 0 if the user does not exist yet.
-    async def get_reputation(self, user):
-        result = self.db_users.search(self.DB_User.id == user.id)
-
-        if result:
-            return result[0]["reputation"]
-        else:
-            return 0
-
-    # Changes the user's reputation by the given value or sets their reputaion to it if the user does not exist.
-    async def update_reputation(self, user, change):
-        reputation = await self.get_reputation(user)
-
-        reputation += change
-
-        await self.set_reputation(user, reputation)
 
     # Compares a User object to a name string and returns if the given object is meant by this string.
     async def is_same_user(self, user_obj, user_str):
