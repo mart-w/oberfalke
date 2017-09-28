@@ -137,7 +137,7 @@ class Oberfalke_client(discord.Client):
             timedatelabel += '.'
 
             quote_embed = discord.Embed(
-                title=quoted_message.content,
+                description=quoted_message.content,
                 color=0x1abc9c
             )
             quote_embed.set_author(
