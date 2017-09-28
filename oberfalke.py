@@ -106,6 +106,7 @@ class Oberfalke_client(discord.Client):
             "Du hast immer die besten Worte parat, %s." % (author_mention_string)
             ]))
         else:
+            await self.update_reputation(mentioner, -1)
             await self.type_message(channel, random.choice([
             "Ist was?!",
             "Muss das jetzt sein?",
