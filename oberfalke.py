@@ -189,7 +189,6 @@ class Oberfalke_client(discord.Client):
 
 
     async def respond_to_falkenheil(self, message):
-        print(self.falkenheil_channels)
         # Make sure the coroutine is not running twice at the same time in one channel
         if not message.channel.id in self.falkenheil_channels:
             self.falkenheil_channels.append(message.channel.id)
